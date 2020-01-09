@@ -300,7 +300,7 @@ const WorkerRow = ({worker, setShowSiteDetails, update}) => {
       <DragSelectable {...draggableProps} styledRoot={TagContainer}>
           {items.map(props => {
             const { id, title, subtitle, group } = props;
-            return <TitledTag key={id} id={id} title={title} subtitle={subtitle} group={group} icon='label' dragable onDoubleClick={() => setShowSiteDetails(props)} />
+            return <TitledTag key={id} id={id} title={title} subtitle={subtitle} group={group} icon='label' onDoubleClick={() => setShowSiteDetails(props)} />
           })}
       </DragSelectable>
 
@@ -341,7 +341,7 @@ const siteReducer = (state, action) => {
 const UnassignedView = props => {
 
   const [displayStyle, setDisplayStyle] = React.useState('grouped'); // grouped, list
-  const [sites,siteDispatch] = React.useReducer(siteReducer, genSites(96));
+  const [sites,siteDispatch] = React.useReducer(siteReducer, genSites(64));
 
   const onAdd = added => {
     siteDispatch({type:'ADD', payload: added});
