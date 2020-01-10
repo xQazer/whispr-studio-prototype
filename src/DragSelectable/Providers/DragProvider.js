@@ -9,10 +9,6 @@ const GhostItem = styled.div`
   left: -${props => props.layer * 3}px;
 `
 
-// Global selection
-// Global items
-// Containers
-
 const maxStackSize = 3;
 
 const initState = {containers:[], items:{}, selected: []};
@@ -40,9 +36,15 @@ const reducer = (state, action) => {
 
     case 'REMOVE_CONTAINER':
       // ref
+
       return {
         ...state,
-        containers: state.containers.filter(e => e.ref !== action.payload)
+        containers: state.containers.filter(e => e.ref !== action.payload),
+        items: Object.entries(state.items).reduce((obj, [key, value]) => {
+          if(value.containerRef === action.payload) return obj;
+          obj[key] = value;
+          return obj;
+        }, {})
       }
 
     case 'SET_CONTAINER_ITEMS': {
@@ -67,6 +69,33 @@ const reducer = (state, action) => {
       }
     }
 
+    case 'ADD_CONTAINER_ITEM': {
+      // {key, ref, node}
+      const {key, ref, containerRef, node} = action.payload;
+      
+      return {
+        ...state,
+        items: {
+          ...state.items,
+          [key]: {key, ref, containerRef, node}
+        }
+      }
+    }
+
+    case 'REMOVE_CONTAINER_ITEM': {
+      // key
+      const newItems = Object.entries(state.items).reduce((obj, [key, value]) => {
+        if(key === action.payload) return obj;
+        obj[key] = value;
+        return obj;
+      }, {});
+
+      return {
+        ...state,
+        items: newItems
+      }
+    }
+
     case 'BEGIN_SELECTION': {
       // e: MouseEvent
 
@@ -82,6 +111,11 @@ const reducer = (state, action) => {
         startPoint: point,
         selected,
         items: Object.entries(state.items).reduce((obj, [key, value]) => {
+
+          if(!value.ref.current) {
+            console.log('Selection item without a null ref found! key:', key);
+          }
+
           obj[key] = {
             ...value,
             rect: value.ref.current.getBoundingClientRect()

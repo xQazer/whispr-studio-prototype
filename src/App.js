@@ -2,9 +2,11 @@ import React from 'react';
 import styled from 'styled-components';
 
 import { Pane, Text, Table, Heading, Button, Icon, IconButton, SegmentedControl, SideSheet, Paragraph, Dialog, TextInput, TextInputField, SelectMenu, Select, Popover, Position, Menu} from 'evergreen-ui';
-import {DragProvider, useDragDispatch} from './DragProvider';
+import {DragProvider, useDragDispatch} from './DragSelectable/Providers/DragProvider';
 import { TitledTag } from './DragSelectableTags';
-import DragSelectable from './DragSelectable';
+import DragSelectable from './DragSelectable/DragSelectableContainer';
+import DragItem from './DragSelectable/DragItem';
+import SelectableContainer from './DragSelectable/SelectableContainer';
 
 const Screen = styled.div`
   background: #f5f6f7;
@@ -341,25 +343,28 @@ const siteReducer = (state, action) => {
 const UnassignedView = props => {
 
   const [displayStyle, setDisplayStyle] = React.useState('grouped'); // grouped, list
-  const [sites,siteDispatch] = React.useReducer(siteReducer, genSites(64));
+  const [sites,siteDispatch] = React.useReducer(siteReducer, genSites(128));
 
-  const onAdd = added => {
-    siteDispatch({type:'ADD', payload: added});
-  }
-
-  const onRemove = removed => {
-    siteDispatch({type:'REMOVE', payload: removed});
-  }
-
-  const onHighlightBegin = items => {
-
-  }
-
-  const onHighlightEnd = items => {
+  const draggableProps = React.useMemo(()=>{
     
-  }
-
-  const draggableProps = {onAdd, onRemove, onHighlightBegin, onHighlightEnd};
+    const onAdd = added => {
+      siteDispatch({type:'ADD', payload: added});
+    }
+    
+    const onRemove = removed => {
+      siteDispatch({type:'REMOVE', payload: removed});
+    }
+    
+    const onHighlightBegin = items => {
+      
+    }
+    
+    const onHighlightEnd = items => {
+      
+    }
+    
+    return {onAdd, onRemove, onHighlightBegin, onHighlightEnd};
+  },[]);
 
   return (
     <Pane flex='0 0 33.33%' background='white' elevation={1}>
@@ -398,7 +403,13 @@ const UnassignedView = props => {
           />
         ]
       }
-      {displayStyle === 'list' && <SitesList />}
+      {displayStyle === 'list' &&
+        <SitesList
+          setShowSiteDetails={props.setShowSiteDetails}
+          items={sites}
+          draggableProps={draggableProps}
+        />
+      }
     </Pane>
   )
 }
@@ -424,30 +435,35 @@ const SitesGroupView = ({label, items, draggableProps, setShowSiteDetails, ...pr
   )
 }
 
-const SitesList = ({setShowSiteDetails, items}) => {
+const SitesList = ({ setShowSiteDetails, items, draggableProps }) => {
+  const containerRef = React.useRef();
   return (
-    <Table>
-      <Table.Head>
-        <Table.TextHeaderCell>Room</Table.TextHeaderCell>
-        <Table.TextHeaderCell>Time</Table.TextHeaderCell>
-        <Table.TextHeaderCell>Note</Table.TextHeaderCell>
-      </Table.Head>
-      <Table.Body>
-        {items.map(props => {
-          const {id, title, subtitle, group} = props;
-          return (
-            <Table.Row>
-              <Table.TextCell>
-                <TitledTag onDoubleClick={() => setShowSiteDetails(props)} key={id} id={id} title={title} subtitle={subtitle} group={group} icon='label' />
-              </Table.TextCell>
-              <Table.TextCell>-m</Table.TextCell>
-              <Table.TextCell>Note...</Table.TextCell>
-            </Table.Row>
-          )
-        })}
-      </Table.Body>
+    <SelectableContainer ref={containerRef} {...draggableProps}>
+      <Table>
+        <Table.Head>
+          <Table.TextHeaderCell>Room</Table.TextHeaderCell>
+          <Table.TextHeaderCell>Time</Table.TextHeaderCell>
+          <Table.TextHeaderCell>Note</Table.TextHeaderCell>
+        </Table.Head>
+        <Table.Body>
+          {items.map(props => {
+            const { id, title, subtitle, group } = props;
+            return (
+              <Table.Row marginY={8} key={id}>
+                <Table.TextCell>
+                  <DragItem id={id} containerRef={containerRef}>
+                    <TitledTag onDoubleClick={() => setShowSiteDetails(props)} key={id} id={id} title={title} subtitle={subtitle} group={group} icon='label' />
+                  </DragItem>
+                </Table.TextCell>
+                <Table.TextCell>-m</Table.TextCell>
+                <Table.TextCell>Note...</Table.TextCell>
+              </Table.Row>
+            )
+          })}
+        </Table.Body>
 
-    </Table>
+      </Table>
+    </SelectableContainer>
   )
 }
 

@@ -1,6 +1,6 @@
 import React from 'react';
-import DragSelectable, { DragSelectableItem } from './DragSelectable';
-import { useDragDispatch } from './DragProvider';
+import DragSelectable, { DragSelectableItem } from './DragSelectable/DragSelectableContainer';
+import { useDragDispatch } from './DragSelectable/Providers/DragProvider';
 import styled from 'styled-components';
 import { Heading, Pane, Text, Icon } from 'evergreen-ui';
 // import { useDragSelectableState, useDragSelectableDispatch } from './DragSelectableProvider';

@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { useDragDispatch, useDragState, isEventAppendMode } from './DragProvider';
+import { useDragDispatch, useDragState, isEventAppendMode } from './Providers/DragProvider';
 
 const SelectionBox = styled.div`
   border: 1px dashed #000;
@@ -40,14 +40,17 @@ const DragSelectable =  props => {
   const isDragging = !!dragState.drag;
   const selectedItems = dragState.selected;
 
+  const { onAdd, onRemove, onHighlightBegin, onHighlightEnd } = props;
+  React.useEffect(() => {
+    dragDispatch({ type: 'SET_CONTAINER', payload: { ref, onAdd, onRemove, onHighlightBegin, onHighlightEnd } });
+  }, [onAdd, onRemove, onHighlightBegin, onHighlightEnd]);
 
   React.useEffect(()=>{
-    dragDispatch({type:'SET_CONTAINER', payload: {ref, ...props}});
-
     return () => {
-      dragDispatch({type: 'REMOVE_CONTAINER', payload: ref});
+      console.log('REMOVE CONTAINER');
+      dragDispatch({ type: 'REMOVE_CONTAINER', payload: ref });
     }
-  },[props]);
+  },[])
 
   const itemDragStart = e => {
     let itemNode = null;
@@ -133,7 +136,7 @@ const DragSelectable =  props => {
     }) 
   }
 
-  const {styledRoot, itemProps, style = {}, ...rest} = props;
+  const {styledRoot, itemProps, ...rest} = props;
 
   const Root = styledRoot || RootDefault;
 
