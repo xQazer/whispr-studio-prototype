@@ -47,7 +47,6 @@ const DragSelectable =  props => {
 
   React.useEffect(()=>{
     return () => {
-      console.log('REMOVE CONTAINER');
       dragDispatch({ type: 'REMOVE_CONTAINER', payload: ref });
     }
   },[])

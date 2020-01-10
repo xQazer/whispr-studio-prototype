@@ -83,9 +83,9 @@ const reducer = (state, action) => {
     }
 
     case 'REMOVE_CONTAINER_ITEM': {
-      // key
+      // { key, containerRef }
       const newItems = Object.entries(state.items).reduce((obj, [key, value]) => {
-        if(key === action.payload) return obj;
+        if(key === action.payload.key && value.containerRef === action.payload.containerRef) return obj;
         obj[key] = value;
         return obj;
       }, {});
@@ -171,6 +171,7 @@ const reducer = (state, action) => {
       }, []).slice(0, maxStackSize);
 
       const selected = [...new Set([draggedItemKey, ...state.selected])]
+
 
       return {
         ...state,

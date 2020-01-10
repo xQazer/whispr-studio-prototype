@@ -26,17 +26,12 @@ const DragItem =  props => {
   const selectedItems = dragState.selected;
   const isSelected = selectedItems.includes(key);
 
-  const { onAdd, onRemove, onHighlightBegin, onHighlightEnd } = props;
-  React.useEffect(() => {
-    dragDispatch({ type: 'SET_CONTAINER', payload: { ref, onAdd, onRemove, onHighlightBegin, onHighlightEnd } });
-  }, [onAdd, onRemove, onHighlightBegin, onHighlightEnd]);
-
   React.useEffect(() => {
     // Apply item to containerRef
     // const {key, ref, containerRef, node} = action.payload;
     dragDispatch({type:'ADD_CONTAINER_ITEM', payload: {key: key, ref, containerRef, node: props.children}});
     return () => {
-      dragDispatch({type:'REMOVE_CONTAINER_ITEM', payload: key});
+      dragDispatch({type:'REMOVE_CONTAINER_ITEM', payload: {key, containerRef}});
     }
   }, [props.children]);
 
