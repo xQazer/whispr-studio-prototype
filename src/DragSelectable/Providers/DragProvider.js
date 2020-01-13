@@ -9,6 +9,11 @@ const GhostItem = styled.div`
   left: -${props => props.layer * 3}px;
 `
 
+// . Rerender on selection change expensive
+// , change callback handling? (statable, rejectable)
+// . selected/highlighted set in state
+// combine container types 
+
 const maxStackSize = 3;
 
 const initState = {containers:[], items:{}, selected: []};
@@ -21,8 +26,8 @@ const reducer = (state, action) => {
     case 'SET_CONTAINER': {
 
       // { ref, onAdd onRemove onHighlightBegin, onHighlightEnd } 
-      const {ref, onAdd, onRemove, onHighlightBegin, onHighlightEnd} = action.payload;
-      const container = {ref, onAdd, onRemove, onHighlightBegin, onHighlightEnd};
+      const {ref, onAdd, onRemove, priority = 0} = action.payload;
+      const container = {ref, onAdd, onRemove, priority};
 
       return {
         ...state,
@@ -118,7 +123,7 @@ const reducer = (state, action) => {
 
           obj[key] = {
             ...value,
-            rect: value.ref.current.getBoundingClientRect()
+            rect: getElPageRect(value.ref.current)
           }
           return obj;
         }, {})
@@ -171,11 +176,11 @@ const reducer = (state, action) => {
       }, []).slice(0, maxStackSize);
 
       const selected = [...new Set([draggedItemKey, ...state.selected])]
-
-
+      
       return {
         ...state,
         selected,
+        containers: state.containers.map(e => ({ ...e, rect: getElPageRect(e.ref.current) })),
         drag: {
           ...action.payload,
           shadows: shadows.reverse(),
@@ -186,13 +191,31 @@ const reducer = (state, action) => {
     case 'END_DRAG':
       return {
         ...state,
-        drag: null
+        drag: null,
+        highlighted: null
       }
 
-    case 'SET_FOCUS':
+
+    case 'CALC_RECT':
       return {
         ...state,
-        focus: action.payload
+        containers: state.containers.map(e => ({ ...e, rect: getElPageRect(e.ref.current) })),
+        items: Object.entries(state.items).reduce((obj, [key, value]) => {
+          if(!value.ref.current) {
+            console.log('Selection item without a null ref found! key:', key);
+          }
+          obj[key] = {
+            ...value,
+            rect: getElPageRect(value.ref.current)
+          }
+          return obj;
+        }, {})
+      }
+
+    case 'SET_HIGHLIGHTED':
+      return {
+        ...state,
+        highlighted: action.payload
       }
 
     default:
@@ -200,15 +223,16 @@ const reducer = (state, action) => {
   }
 }
 
-const DragProvider = ({children}) => {
+export const DragProvider = ({children}) => {
+
   const [state, dispatch] = React.useReducer(reducer, initState);
 
   return (
     <DragStateContext.Provider value={state}>
       <DragDispatchContext.Provider value={dispatch}>
         {children}
-        {state.drag && <DragController state={state} dispatch={dispatch} />}
-        {state.startPoint && <SelectionController state={state} dispatch={dispatch} />}
+        <DragController />
+        <SelectionController />
       </DragDispatchContext.Provider>
     </DragStateContext.Provider>
   )
@@ -221,7 +245,9 @@ const SelectionBox = styled.div`
 `
 
 const selectionUpdateInterval = 50;
-const SelectionController = ({state, dispatch}) => {
+const SelectionController = props => {
+
+  const [state,dispatch] = useDragContext();
 
   const {startPoint, selected, items} = state;
 
@@ -233,11 +259,20 @@ const SelectionController = ({state, dispatch}) => {
   const itemsDep = Object.values(state.items).map(e => e.key).join('');
 
   React.useEffect(()=> {
-    
+
     const onMouseUp = e => {
       dispatch({type:'END_SELECTION'});
       setEndPoint(null);
     }
+
+    window.document.addEventListener('mouseup', onMouseUp);
+
+    return () => {
+      window.document.removeEventListener('mouseup', onMouseUp);
+    }
+  }, []);
+
+  React.useEffect(()=> {
   
     const onMouseMove = e => {
       e.preventDefault();
@@ -262,10 +297,8 @@ const SelectionController = ({state, dispatch}) => {
       let newSelected = appendMode ? [...selected] : [];
       const selectionRect = getSelectionBoxRect(startPoint, endPoint);
 
-      Object.entries(state.items).forEach(([key, {rect}]) => {
-        const {width, height, top, left} = rect;
-        const coords = {width, height, top: top + window.pageYOffset, left: left + window.pageXOffset};
-        if (boxIntersects(selectionRect, coords)) {
+      Object.entries(state.items).forEach(([_, { key, rect }]) => {
+        if (boxIntersects(selectionRect, rect)) {
           newSelected.push(key);
         } else {
           if (!appendMode){
@@ -282,22 +315,22 @@ const SelectionController = ({state, dispatch}) => {
         }
       }
 
-      dispatch({type:'SET_SELECTED', payload: newSelected});
+      // const _selected = [...new Set(newSelected)];
+      dispatch({type:'SET_SELECTED', payload: [...new Set(newSelected)]});
       // setSelectedItems([...new Set(newSelected)]);
     }
 
     if(mouseDown){
       window.document.addEventListener('mousemove', onMouseMove);
-      window.document.addEventListener('mouseup', onMouseUp);
     }
 
     return () => {
       window.document.removeEventListener('mousemove', onMouseMove);
-      window.document.removeEventListener('mouseup', onMouseUp);
     }
   }, [mouseDown, selected.join(''), itemsDep]);
 
   if(!endPoint) return null;
+  if(!state.startPoint) return null;
 
   return ReactDOM.createPortal(
     <SelectionBox style={getSelectionBoxRect(startPoint, endPoint)} />,
@@ -321,74 +354,56 @@ const getSelectionBoxRect = (startPoint, endPoint) => {
   return {left,top,width,height};
 }
 
-const DragController = ({state, dispatch}) => {
+const intersects = (pos, rect) => {
+  const { x, y } = pos;
+  const {top, left, width, height} = rect;
 
-  const [pos,setPos] = React.useState(state.drag.start);
+  return (
+    x > left && x < left + width &&
+    y > top && y < top + height
+  )
+}
+
+const getSelectedContainer = (containers, mousePos) => {
+  const intersectedContainers = containers.filter(({rect}) => {
+    return (intersects(mousePos, rect))
+  })
+
+  return intersectedContainers && intersectedContainers.sort((a,b) => b.priority - a.priority)[0];
+}
+
+const DragController = props => {
+  const [state,dispatch] = useDragContext();
+
+  const [pos,setPos] = React.useState();
   const selectedContainerRef = React.useRef(null);
 
-  const {dragOffset, items, shadows} = state.drag;
-
-  const findContainerByRef = ref => {
-    return state.containers.find(e => e.ref.current === ref.current);
-  }
-
-  const call = func => {
-    const itemProps = Object.values(state.items).reduce((arr, {key, node}) => {
-      if(!items.includes(key)) return arr;
-      arr.push(node.props);
-      return arr;
-    }, []);
-    typeof func === 'function' && func(itemProps);
-  }
 
   const onMouseMove = e => {
     const pos = {x: e.pageX, y: e.pageY};
     setPos(pos);
 
-    const currSelected = state.containers.find(container => {
-      return (intersects(pos, container.ref))
-    });
-
-    if(!currSelected) return;
-
-    if(currSelected.ref !== selectedContainerRef){
-      if(selectedContainerRef.current){
-        const oldSelected = findContainerByRef(selectedContainerRef);
-        call(oldSelected.onHighlightEnd);
-      }
-      call(currSelected.onHighlightBegin);
-      selectedContainerRef.current = currSelected.ref.current;
+    const currSelected = getSelectedContainer(state.containers, pos);
+    const currContainerEl = currSelected && currSelected.ref.current;
+    
+    if(currContainerEl !== selectedContainerRef.current){
+      dispatch({type:'SET_HIGHLIGHTED', payload: currSelected && currSelected.ref});
+      selectedContainerRef.current = currContainerEl;
     }
   }
 
-  const intersects = (pos, ref) => {
-    const { x, y } = pos;
-    const node = ref.current;
-    const top = node.offsetTop;
-    const left = node.offsetLeft;
-    const width = node.clientWidth;
-    const height = node.clientHeight;
-
-    return (
-      x > left && x < left + width &&
-      y > top && y < top + height
-    )
-  }
-
   const onMouseUp = e => {
-    
+
     const pos = {x: e.pageX, y: e.pageY};
     dispatch({type:'END_DRAG'});
+
+    const currSelected = getSelectedContainer(state.containers, pos);
     
-    const currSelected = state.containers.find(container => {
-      return (intersects(pos, container.ref))
-    });
     setPos(null);
 
     if(!currSelected) return;
 
     const containerItems = state.drag.items.map(key => state.items[key]);
-
     const containers = containerItems.reduce((arr, {containerRef}) => {
       if(arr.includes(containerRef) || currSelected.ref === containerRef) return arr;
       arr.push(containerRef);
@@ -397,6 +412,7 @@ const DragController = ({state, dispatch}) => {
 
     let wasModified = false;
 
+    let removeCalls = [];
     containers.forEach(containerRef => {
 
       const container = state.containers.find(({ref}) => ref === containerRef);
@@ -406,7 +422,9 @@ const DragController = ({state, dispatch}) => {
       })
       if(removeItems.length > 0){
         wasModified = true;
-        container.onRemove(removeItems);
+        removeCalls.push(()=> {
+          container.onRemove(removeItems);
+        })
       }
     })
 
@@ -418,7 +436,9 @@ const DragController = ({state, dispatch}) => {
     
     if(addItems.length > 0){
       wasModified = true;
-      targetCotainer.onAdd(addItems);
+      targetCotainer.onAdd(addItems, () => {
+        removeCalls.forEach(fn => fn());
+      });
     }
 
     if(wasModified){
@@ -428,17 +448,22 @@ const DragController = ({state, dispatch}) => {
 
   React.useEffect(()=> {
 
-    window.document.addEventListener('mousemove', onMouseMove);
-    window.document.addEventListener('mouseup', onMouseUp);
+    if(state.drag){
+      setPos(state.drag.start);
+      window.document.addEventListener('mousemove', onMouseMove);
+      window.document.addEventListener('mouseup', onMouseUp);
+    }
 
     return () => {
       window.document.removeEventListener('mousemove', onMouseMove);
       window.document.removeEventListener('mouseup', onMouseUp);
     }
 
-  },[]);
+  },[state.drag]);
 
   if(!pos) return null;
+  if(!state.drag) return null;
+  const {dragOffset, shadows} = state.drag;
 
   return (
     <div style={{
@@ -461,18 +486,33 @@ export const isEventAppendMode = e => {
   return e.ctrlKey || e.altKey || e.shiftKey;
 }
 
-function useDragState() {
+export const useDragContext = () => {
+  return [useDragState(), useDragDispatch()];
+}
+
+export const useDragState = () => {
   const context = React.useContext(DragStateContext);
   if (context === undefined) {
-    throw new Error('useState must be used within a DragProvider');
+    throw new Error('useDragState must be used within a DragProvider');
   }
   return context;
 }
-function useDragDispatch() {
+
+export const useDragDispatch = () => {
   const context = React.useContext(DragDispatchContext);
   if (context === undefined) {
-    throw new Error('useDispatch must be used within a DragProvider');
+    throw new Error('useDragDispatch must be used within a DragProvider');
   }
   return context;
 }
-export {DragProvider, useDragState, useDragDispatch};
+
+export const getSelectedItems = state => {
+  return state.selected.map((key) => {
+    return state.items[key];
+  })
+}
+
+const getElPageRect = el => {
+  const clientRect = el.getBoundingClientRect();
+  return { top: clientRect.top + window.pageYOffset, left: clientRect.left + window.pageXOffset, width: clientRect.width, height: clientRect.height };
+}

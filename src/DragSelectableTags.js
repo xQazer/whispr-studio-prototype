@@ -1,8 +1,8 @@
 import React from 'react';
 import DragSelectable, { DragSelectableItem } from './DragSelectable/DragSelectableContainer';
-import { useDragDispatch } from './DragSelectable/Providers/DragProvider';
 import styled from 'styled-components';
 import { Heading, Pane, Text, Icon } from 'evergreen-ui';
+import { useDragDispatch } from './DragSelectable/Providers/DragProvider';
 // import { useDragSelectableState, useDragSelectableDispatch } from './DragSelectableProvider';
 
 
@@ -18,11 +18,10 @@ const TagItem = styled(Pane)`
   background: ${props => props.isSelected ? '#fdf8f3' : '#fff'};
 
   opacity: ${props => props.isShadow ? 0.75 : 1};
+  cursor: ${props => props.isShadow ? 'grabbing' : 'pointer'};
 
   box-sizing: border-box;
   user-select: none;
-
-  cursor: pointer;
 `
 
 const TagHandle = styled.div`

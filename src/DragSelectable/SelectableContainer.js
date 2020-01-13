@@ -1,27 +1,30 @@
 import React from 'react';
 import styled from 'styled-components';
-import { useDragDispatch, useDragState, isEventAppendMode } from './Providers/DragProvider';
-
-const SelectionBox = styled.div`
-  border: 1px dashed #000;
-  position: absolute;
-  z-index: 1000;
-`
+import { isEventAppendMode, useDragContext } from './Providers/DragProvider';
 
 const RootDefault = styled.div`
   position: relative;
+  width: 100%;
+  height: 100%;
 `
-
 
 const SelectableContainer = React.forwardRef((props, ref) => {
 
-  const dragState = useDragState();
-  const dragDispatch = useDragDispatch();
+  const [dragState, dragDispatch] = useDragContext();
 
-  const { onAdd, onRemove, onHighlightBegin, onHighlightEnd } = props;
+  const { noSelection, styledRoot, onAdd, onRemove, onHighlightChange, priority, ...rest } = props;
+
+  const lastHighlightedState = React.useRef();
+  const highlighted = dragState.highlighted === ref;
+
+  if(lastHighlightedState.current !== highlighted){
+    typeof onHighlightChange === 'function' && onHighlightChange(highlighted);
+    lastHighlightedState.current = highlighted;
+  }
+
   React.useEffect(() => {
-    dragDispatch({ type: 'SET_CONTAINER', payload: { ref, onAdd, onRemove, onHighlightBegin, onHighlightEnd } });
-  }, [onAdd, onRemove, onHighlightBegin, onHighlightEnd]);
+    dragDispatch({ type: 'SET_CONTAINER', payload: { ref, onAdd, onRemove, priority } });
+  }, [onAdd, onRemove, priority]);
 
   React.useEffect(()=>{
     return () => {
@@ -43,12 +46,10 @@ const SelectableContainer = React.forwardRef((props, ref) => {
     dragDispatch({ type: 'BEGIN_SELECTION', payload: { appendMode, point: { x: e.pageX, y: e.pageY }, target: e.target } });
   }
 
-  const {styledRoot, itemProps, ...rest} = props;
-
   const Root = styledRoot || RootDefault;
 
   return (
-    <Root {...rest} ref={ref} style={{position:'relative'}} onMouseDown={onMouseDown}>
+    <Root {...rest} ref={ref} style={{position:'relative'}} onMouseDown={noSelection ? null : onMouseDown}>
       {props.children}
     </Root>
   )

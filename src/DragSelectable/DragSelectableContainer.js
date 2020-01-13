@@ -1,32 +1,39 @@
 import React from 'react';
 import styled from 'styled-components';
-import { useDragDispatch, useDragState, isEventAppendMode } from './Providers/DragProvider';
-
-const SelectionBox = styled.div`
-  border: 1px dashed #000;
-  position: absolute;
-  z-index: 1000;
-`
+import {  isEventAppendMode, useDragContext } from './Providers/DragProvider';
 
 const RootDefault = styled.div`
   position: relative;
+  width: 100%;
+  height: 100%;
 `
 
 
 const DragSelectable =  props => {
 
+  const {noSelection, onHighlightChange, styledRoot, itemProps, ...rest} = props;
+
   const ref = React.useRef();
   const childrenItems = Array.isArray(props.children) ? props.children : [props.children];
 
-  const dragState = useDragState();
-  const dragDispatch = useDragDispatch();
+  const [dragState, dragDispatch] = useDragContext();
+  // const dragDispatch = useDragDispatch();
+
+  const lastHighlightedState = React.useRef();
+  const highlighted = dragState.highlighted === ref;
+
+  if(lastHighlightedState.current !== highlighted){
+    typeof onHighlightChange === 'function' && onHighlightChange(highlighted);
+    lastHighlightedState.current = highlighted;
+  }
+
 
   const childrenId = childrenItems.map(e => e.key).join('');
   const refs = React.useMemo(() => {
     let obj = {};
     let items = [];
     React.Children.forEach(childrenItems, (child, index) => {
-      const key = child.key || index;
+      const key = child.props.id;
       obj[key] = React.createRef();
       items.push({key, ref: obj[key], node: child});
     })
@@ -40,10 +47,10 @@ const DragSelectable =  props => {
   const isDragging = !!dragState.drag;
   const selectedItems = dragState.selected;
 
-  const { onAdd, onRemove, onHighlightBegin, onHighlightEnd } = props;
+  const { onAdd, onRemove, priority } = props;
   React.useEffect(() => {
-    dragDispatch({ type: 'SET_CONTAINER', payload: { ref, onAdd, onRemove, onHighlightBegin, onHighlightEnd } });
-  }, [onAdd, onRemove, onHighlightBegin, onHighlightEnd]);
+    dragDispatch({ type: 'SET_CONTAINER', payload: { ref, onAdd, onRemove, priority } });
+  }, [onAdd, onRemove]);
 
   React.useEffect(()=>{
     return () => {
@@ -73,11 +80,12 @@ const DragSelectable =  props => {
       y: e.clientY - rect.y
     };
 
-    const draggedItem = Object.entries(refs).find(([key, ref]) => {
+    const draggedItem = Object.values(dragState.items).find(({ref}) => {
       return ref.current === itemNode;
     })
 
-    const draggedItemKey = typeof draggedItem == 'object' && draggedItem[0];
+    
+    const draggedItemKey = typeof draggedItem == 'object' && draggedItem.key;
     dragDispatch({ type: 'BEGIN_DRAG', payload: {ref, start: { x: e.pageX, y: e.pageY }, dragOffset: offset, draggedItemKey } });
   }
 
@@ -97,11 +105,9 @@ const DragSelectable =  props => {
   }
 
   const renderChildren = () => {
-    let index = 0;
-
     return React.Children.map(childrenItems, child => {
-      const tmpKey = child.key || String(index++);
-      const isSelected = selectedItems.includes(tmpKey);
+      const key = child.props.id;
+      const isSelected = selectedItems.includes(key);
 
       const onClick =  e => {
         e.preventDefault();
@@ -109,25 +115,25 @@ const DragSelectable =  props => {
           e.stopPropagation();
 
           if(isSelected){
-            dragDispatch({type:'REMOVE_SELECT', payload: tmpKey});
+            dragDispatch({type:'REMOVE_SELECT', payload: key});
           } else {
-            dragDispatch({type:'ADD_SELECT', payload: tmpKey})
+            dragDispatch({type:'ADD_SELECT', payload: key})
           }
           return;
         }
 
         if(isSelected){
-          dragDispatch({type:'REMOVE_SELECT', payload: tmpKey});
+          dragDispatch({type:'REMOVE_SELECT', payload: key});
         } else {
-          dragDispatch({type:'SET_SELECTED', payload: [tmpKey]});
+          dragDispatch({type:'SET_SELECTED', payload: [key]});
         }
       }
 
       const isShadow = isSelected && isDragging;
 
       return React.cloneElement(child, {
-        key: tmpKey,
-        ref: refs[tmpKey],
+        key: key,
+        ref: refs[key],
         isSelected,
         isShadow,
         onClickCapture: onClick,
@@ -135,14 +141,14 @@ const DragSelectable =  props => {
     }) 
   }
 
-  const {styledRoot, itemProps, ...rest} = props;
+  // const {, ...rest} = props;
 
   const Root = styledRoot || RootDefault;
 
   const children = React.useMemo(renderChildren, [refs, isDragging, selectedItems.join('')]);
 
   return (
-    <Root {...rest} ref={ref} style={{position:'relative'}} onMouseDown={onMouseDown}>
+    <Root {...rest} ref={ref} style={{position:'relative'}} onMouseDown={noSelection ? null : onMouseDown}>
       {children}
     </Root>
   )

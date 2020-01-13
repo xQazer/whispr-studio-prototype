@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { useDragDispatch, useDragState, isEventAppendMode } from './Providers/DragProvider';
+import { useDragContext } from './Providers/DragProvider';
 
 const SelectionBox = styled.div`
   border: 1px dashed #000;
@@ -16,95 +16,94 @@ const RootDefault = styled.div`
 const DragItem =  props => {
 
   const {containerRef} = props;
-  const key = String(props.id);
+  const key = props.id;
 
   const ref = React.useRef();
-  const dragState = useDragState();
-  const dragDispatch = useDragDispatch();
+  const [dragState, dragDispatch] = useDragContext();
+  // const dragDispatch = useDragDispatch();
+
+  React.useEffect(() => {
+    // Apply item to containerRef
+    // const {key, ref, containerRef, node} = action.payload;
+    dragDispatch({ type: 'ADD_CONTAINER_ITEM', payload: { key: key, ref, containerRef, node: props.children } });
+    return () => {
+      dragDispatch({ type: 'REMOVE_CONTAINER_ITEM', payload: { key, containerRef } });
+    }
+  }, []);
 
   const isDragging = !!dragState.drag;
   const selectedItems = dragState.selected;
   const isSelected = selectedItems.includes(key);
 
-  React.useEffect(() => {
-    // Apply item to containerRef
-    // const {key, ref, containerRef, node} = action.payload;
-    dragDispatch({type:'ADD_CONTAINER_ITEM', payload: {key: key, ref, containerRef, node: props.children}});
-    return () => {
-      dragDispatch({type:'REMOVE_CONTAINER_ITEM', payload: {key, containerRef}});
-    }
-  }, [props.children]);
+  return React.useMemo(()=>{
 
-  const itemDragStart = e => {
+    const itemDragStart = e => {
 
-    const rect = ref.current.getBoundingClientRect();
-    const offset = {
-      x: e.clientX - rect.x,
-      y: e.clientY - rect.y
-    };
+      const node = ref.current;
 
-    dragDispatch({ type: 'BEGIN_DRAG', payload: {ref, start: { x: e.pageX, y: e.pageY }, dragOffset: offset, draggedItemKey: key } });
-  }
+      const rect = node.getBoundingClientRect();
+      const offset = {
+        x: e.clientX - rect.x,
+        y: e.clientY - rect.y
+      };
 
-  const onMouseDown = e => {
-
-    if(e.target.classList.contains('drag-handle')){
-      itemDragStart(e);
-      return;
+      dragDispatch({ type: 'BEGIN_DRAG', payload: { ref, start: { x: e.pageX, y: e.pageY }, dragOffset: offset, draggedItemKey: key } });
     }
 
-    // if(e.button === 2 || e.nativeEvent.which === 2){
-    //   return;
-    // }
+    const onMouseDown = e => {
 
-    // const appendMode = isEventAppendMode(e);
-    // dragDispatch({ type: 'BEGIN_SELECTION', payload: { appendMode, point: { x: e.pageX, y: e.pageY }, target: e.target } });
-  }
-
-  const renderChildren = () => {
-
-    const onClick =  e => {
-      e.preventDefault();
-      if (e.ctrlKey || e.altKey || e.shiftKey) {
-        e.stopPropagation();
-
-        if(isSelected){
-          dragDispatch({type:'REMOVE_SELECT', payload: key});
-        } else {
-          dragDispatch({type:'ADD_SELECT', payload: key})
-        }
+      if (e.target.classList.contains('drag-handle')) {
+        itemDragStart(e);
         return;
       }
-
-      if(isSelected){
-        dragDispatch({type:'REMOVE_SELECT', payload: key});
-      } else {
-        dragDispatch({type:'SET_SELECTED', payload: [key]});
-      }
     }
 
-    const isShadow = isSelected && isDragging;
+    const renderChildren = () => {
 
-    return React.cloneElement(props.children, {
-      key: key,
-      ref,
-      isSelected,
-      isShadow,
-      onClickCapture: onClick,
-    })
-  }
+      const onClick = e => {
+        e.preventDefault();
+        if (e.ctrlKey || e.altKey || e.shiftKey) {
+          e.stopPropagation();
 
-  const {styledRoot, itemProps, ...rest} = props;
+          if (isSelected) {
+            dragDispatch({ type: 'REMOVE_SELECT', payload: key });
+          } else {
+            dragDispatch({ type: 'ADD_SELECT', payload: key })
+          }
+          return;
+        }
 
-  const Root = styledRoot || RootDefault;
+        if (isSelected) {
+          dragDispatch({ type: 'REMOVE_SELECT', payload: key });
+        } else {
+          dragDispatch({ type: 'SET_SELECTED', payload: [key] });
+        }
+      }
 
-  const children = React.useMemo(renderChildren, [ref, isDragging, isSelected]);
+      const isShadow = isSelected && isDragging;
 
-  return (
-    <Root {...rest} ref={ref} style={{position:'relative'}} onMouseDown={onMouseDown}>
-      {children}
-    </Root>
-  )
+
+      return React.cloneElement(props.children, {
+        key,
+        ref,
+        isSelected,
+        isShadow,
+        onClickCapture: onClick,
+      })
+    }
+
+    const { styledRoot, itemProps, ...rest } = props;
+
+    const Root = styledRoot || RootDefault;
+
+    // const children = React.useMemo(renderChildren, [ref, isDragging, isSelected]);
+
+    return (
+      <Root {...rest} ref={ref} style={{ position: 'relative' }} onMouseDown={onMouseDown}>
+        {renderChildren()}
+      </Root>
+    )
+  }, [ref, isDragging, isSelected])
 }
 
 export default DragItem;
